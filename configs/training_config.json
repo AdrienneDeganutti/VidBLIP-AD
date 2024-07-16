@@ -1,0 +1,23 @@
+{
+    "model_name_or_path": "Salesforce/blip2-opt-2.7b",
+    "num_subsample_frames": 8,
+    "train_visual_features_dir": "/mnt/welles/scratch/adrienne/MAD-dataset-32-clips/32_clips_tsv/32_clips_train_features.tsv",
+    "val_visual_features_dir": "/mnt/welles/scratch/adrienne/MAD-dataset-32-clips/32_clips_tsv/32_clips_val_features.tsv",
+    "train_annotation_file": "/mnt/welles/scratch/adrienne/MAD-dataset-32-clips/metadata/train.caption.tsv",
+    "val_annotation_file": "/mnt/welles/scratch/adrienne/MAD-dataset-32-clips/metadata/val.caption.tsv",
+    "output_dir": "output/",
+    "num_train_epochs": 5,
+    "warmup_steps": 1000,
+    "learning_rate": 1e-5,
+    "per_device_train_batch_size": 32,
+    "gradient_accumulation_steps": 4,       
+    "weight_decay": 0.05,
+    "dataloader_num_workers": 2,
+    "bf16": false,
+    "evaluation_strategy": "steps",
+    "eval_steps": 200,
+    "save_strategy": "steps",
+    "save_steps": 200,
+    "save_total_limit": 3,
+    "logging_steps": 10
+}
