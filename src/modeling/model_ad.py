@@ -1,9 +1,6 @@
 import torch
 from torch import nn
-from typing import Tuple, List, Union, Optional
-from transformers import GPT2Tokenizer, GPT2LMHeadModel
-from collections import OrderedDict
-from einops import rearrange
+from transformers import GPT2LMHeadModel
 from .model_tfm import PerceiverEncoder
 
 
@@ -38,7 +35,6 @@ class VideoCaptionModel(nn.Module):
         assert use_context_perceiver in [0, 1]
         if use_context_perceiver == 1:
             # produce <BOS>, <EOS> around the context features 
-            #self.context_special_token = nn.Embedding(2, embedding_dim=self.gpt_embedding_size)
             self.context_special_token = nn.Embedding(2, embedding_dim=1)
 
         ### subtitle ###
@@ -75,6 +71,4 @@ class VideoCaptionModel(nn.Module):
         latent_vector = self.perceiver(visual_feature, img_ID)
         prefix_vector = self.project(latent_vector)
 
-        #context = self.wrap_context(context_embed)
-        #return prefix_vector, context
         return prefix_vector
