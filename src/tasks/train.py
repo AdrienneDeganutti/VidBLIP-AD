@@ -29,19 +29,17 @@ PROMPT = "Question: What is the camera wearer doing? Answer:"
 
 
 def preprocess(
-    processor: transformers.Blip2Processor,
-    item: dict[str, Any],
-    decoder_only_lm: bool = True,
-    video_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
-) -> dict[str, torch.Tensor]:
+            processor: transformers.Blip2Processor,
+            item: dict[str, Any],
+            decoder_only_lm: bool = True
+        ) -> dict[str, torch.Tensor]:
+    
     # tokenize text inputs
     cleaned_narration_text = clean_narration_text(item["captions"])
     preprocessed = generate_input_ids_and_labels(
         processor.tokenizer, PROMPT, cleaned_narration_text, decoder_only_lm
     )
     preprocessed["pixel_values"] = item["frames"]
-    #if video_transform is not None:
-    #    preprocessed["pixel_values"] = video_transform(preprocessed["pixel_values"])
 
     return preprocessed
 
@@ -77,10 +75,7 @@ def train():
         transform=partial(
             preprocess,
             processor,
-            decoder_only_lm=model.config.use_decoder_only_language_model,
-            video_transform=Compose(
-                [UniformTemporalSubsample(model_args.num_subsample_frames)]
-            ),
+            decoder_only_lm=model.config.use_decoder_only_language_model
         ),
     )
     val_data = FrameDataset(
@@ -89,10 +84,7 @@ def train():
         transform=partial(
             preprocess,
             processor,
-            decoder_only_lm=model.config.use_decoder_only_language_model,
-            video_transform=Compose(
-                [UniformTemporalSubsample(model_args.num_subsample_frames)]
-            ),
+            decoder_only_lm=model.config.use_decoder_only_language_model
         ),
     )
 
