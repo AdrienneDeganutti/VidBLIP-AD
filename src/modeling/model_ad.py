@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from transformers import GPT2LMHeadModel
+#from transformers import GPT2LMHeadModel
 from .model_tfm import PerceiverEncoder
 
 
@@ -17,8 +17,7 @@ class VideoCaptionModel(nn.Module):
         if len(kwargs):
             print(f'WARNING [VideoCaptionModel] kwargs not used: {kwargs}')
         self.num_layers = num_layers
-        self.gpt = GPT2LMHeadModel.from_pretrained('gpt2')
-        self.gpt_embedding_size = self.gpt.transformer.wte.weight.shape[1]
+        self.blip_embedding_size = 1408
 
         ### visual ###
         self.perceiver = PerceiverEncoder(
@@ -26,7 +25,7 @@ class VideoCaptionModel(nn.Module):
             d_latents=prefix_size, 
             num_layers=num_layers, 
             nhead=prefix_size//64)
-        self.project = nn.Linear(prefix_size, self.gpt_embedding_size)
+        self.project = nn.Linear(prefix_size, self.blip_embedding_size)
         nn.init.normal_(self.project.weight, std=prefix_size ** -0.5)
         nn.init.zeros_(self.project.bias)
 
@@ -42,10 +41,10 @@ class VideoCaptionModel(nn.Module):
         assert use_subtitle_perceiver in [0, 3, 4]
         if use_subtitle_perceiver in [3, 4]:
             # produce <BOS>, <EOS> around the context features 
-            self.subtitle_special_token = nn.Embedding(2, embedding_dim=self.gpt_embedding_size)
+            self.subtitle_special_token = nn.Embedding(2, embedding_dim=self.blip_embedding_size)
 
         ### BOS token for AD generation
-        self.bos_token = nn.Embedding(1, embedding_dim=self.gpt_embedding_size)
+        self.bos_token = nn.Embedding(1, embedding_dim=self.blip_embedding_size)
 
     def wrap_context(self, context_embed, prompt=None):
         """assume context_embed: B,N,C. Add <bos> <eos> on it"""
@@ -63,12 +62,14 @@ class VideoCaptionModel(nn.Module):
         eos = self.subtitle_special_token.weight[None, 1:2].repeat(B,1,1)
         return torch.cat((bos, subtitle_embed, eos), dim=1)
 
-    #def forward(self, visual_feature, context_embed, mask=None, labels=None):
-    def forward(self, visual_feature, img_ID, mask=None, labels=None):
+    #def forward(self, visual_feature, img_ID, mask=None, labels=None):
+    #def forward(self, input_ids, attention_mask, labels, pixel_values, output_attentions, output_hidden_states):
+    def forward(self, pixel_values, output_attentions, output_hidden_states, return_dict, interpolate_pos_encoding):
         """purely for visual prompt"""
         # visual_feature: b t c
         # prefix_vector: b k c
-        latent_vector = self.perceiver(visual_feature, img_ID)
+        latent_vector = self.perceiver(pixel_values)
+        #latent_vector = self.perceiver(visual_feature, img_ID)
         prefix_vector = self.project(latent_vector)
 
         return prefix_vector

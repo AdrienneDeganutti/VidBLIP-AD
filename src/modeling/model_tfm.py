@@ -65,7 +65,7 @@ class TemporalEncoder(nn.Module):
 
 class PerceiverEncoder(nn.Module):
     """Perceiver-like module, with TransformerEncoder([latent; features])"""
-    def __init__(self, num_latents=16, d_latents=768, nhead=8, num_layers=2):
+    def __init__(self, num_latents=16, d_latents=1408, nhead=8, num_layers=2):
         super().__init__()
         self.num_latents = num_latents
         self.latent = nn.Parameter(torch.empty(num_latents, d_latents))
@@ -86,7 +86,7 @@ class PerceiverEncoder(nn.Module):
             nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
             nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
 
-    def forward(self, visual_feature, img_ID, key_padding_mask=None):
+    def forward(self, visual_feature, key_padding_mask=None):
         B, T, *_ = visual_feature.shape
         visual_feature = rearrange(visual_feature, 'b t c -> t b c')
         temp_pos = self.temporal_pos_embed[0:T, None, :]
