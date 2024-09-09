@@ -45,7 +45,7 @@ def preprocess(
 
 
 def train():
-    config_file = "VidBLIP-AD/configs/training_config.json"
+    config_file = "configs/training_config.json"
     model_args, data_args, training_args = get_custom_args(config_file)
 
     # Don't remove "unused columns" such as clip-related columns
