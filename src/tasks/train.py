@@ -11,11 +11,10 @@ print(pythonpath)
 sys.path.insert(0, pythonpath)
 
 import torch
-import transformers
-from pytorchvideo.transforms import UniformTemporalSubsample
-from torchvision.transforms import Compose
+from transformers import Blip2Processor
 from transformers.deepspeed import is_deepspeed_zero3_enabled
 
+from src.transformers.trainer import Trainer
 from src.datasets.frame import FrameDataset
 from src.datasets.utils import (
     DataCollatorForVideoSeq2Seq,
@@ -25,11 +24,11 @@ from src.datasets.utils import (
 from src.modeling.model_blip import VideoBlipForConditionalGeneration
 from configs.load_config import get_custom_args
 
-PROMPT = "Question: What is the camera wearer doing? Answer:"
+#PROMPT = "Question: What is the camera wearer doing? Answer:"
 
 
 def preprocess(
-            processor: transformers.Blip2Processor,
+            processor: Blip2Processor,
             item: dict[str, Any],
             decoder_only_lm: bool = True
         ) -> dict[str, torch.Tensor]:
@@ -37,7 +36,7 @@ def preprocess(
     # tokenize text inputs
     cleaned_narration_text = clean_narration_text(item["captions"])
     preprocessed = generate_input_ids_and_labels(
-        processor.tokenizer, PROMPT, cleaned_narration_text, decoder_only_lm
+        processor.tokenizer, cleaned_narration_text, decoder_only_lm        # PROMPT removed
     )
     preprocessed["pixel_values"] = item["frames"]
 
@@ -53,21 +52,27 @@ def train():
     # Don't remove "unused columns" such as clip-related columns
     training_args.remove_unused_columns = False
 
-    processor = transformers.Blip2Processor.from_pretrained(
+    processor = Blip2Processor.from_pretrained(
         model_args.model_name_or_path
     )
     model = VideoBlipForConditionalGeneration.from_pretrained(
         model_args.model_name_or_path,
-        low_cpu_mem_usage=False if is_deepspeed_zero3_enabled() else True,
+        training_args,
+        #low_cpu_mem_usage=False if is_deepspeed_zero3_enabled() else True,
+        low_cpu_mem_usage=False
     )
-    # freeze everything except for qformer
-    for param in model.vision_model.parameters():
-        param.requires_grad = False
+    
+    # freeze everything except for qformer and vision_model:
     for param in model.language_model.parameters():
         param.requires_grad = False
-    # we need to enable input require grads since the vision model (the first layer) is
-    # frozen.
+
+    # ensure that the vision model parameters are trainable:
+    #for param in model.vision_model.parameters():
+    #    param.requires_grad = True
+
+    # we need to enable input require grads since the vision model (the first layer) is frozen.
     model.enable_input_require_grads()
+    model = model.to(training_args.device)
 
     train_data = FrameDataset(
         data_args.train_visual_features_dir,
@@ -91,7 +96,7 @@ def train():
     # Load the best model at the end so we can save it
     training_args.load_best_model_at_end = True
 
-    trainer = transformers.Trainer(
+    trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_data,
