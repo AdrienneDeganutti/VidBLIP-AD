@@ -46,7 +46,7 @@ def get_custom_args(config_file: str):
         weight_decay=config['weight_decay'],
         dataloader_num_workers=config['dataloader_num_workers'],
         bf16=config['bf16'],
-        evaluation_strategy=config['evaluation_strategy'],
+        eval_strategy=config['eval_strategy'],
         eval_steps=config['eval_steps'],
         save_strategy=config['save_strategy'],
         save_steps=config['save_steps'],
