@@ -11,13 +11,14 @@ from src.modeling.model_ad import VideoCaptionModel
 
 
 class VideoBlipForConditionalGeneration(Blip2ForConditionalGeneration):
-    def __init__(self, config: Blip2Config) -> None:
+    def __init__(self, config: Blip2Config, training_args) -> None:
         # HACK: we call the grandparent super().__init__() to bypass
         # Blip2ForConditionalGeneration.__init__() so we can replace
         # self.vision_model
         super(Blip2ForConditionalGeneration, self).__init__(config)
 
-        self.vision_model = VideoCaptionModel(num_latents=self.config.max_length)
+        #self.vision_model = VideoCaptionModel(num_latents=self.config.max_length)
+        #self.vision_model = VideoCaptionModel(num_latents=8)
 
         self.query_tokens = nn.Parameter(
             torch.zeros(1, config.num_query_tokens, config.qformer_config.hidden_size)
