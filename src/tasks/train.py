@@ -11,10 +11,9 @@ print(pythonpath)
 sys.path.insert(0, pythonpath)
 
 import torch
+import transformers
 from transformers import Blip2Processor
-from transformers.deepspeed import is_deepspeed_zero3_enabled
 
-from src.transformers.trainer import Trainer
 from src.datasets.frame import FrameDataset
 from src.datasets.utils import (
     DataCollatorForVideoSeq2Seq,
@@ -96,7 +95,7 @@ def train():
     # Load the best model at the end so we can save it
     training_args.load_best_model_at_end = True
 
-    trainer = Trainer(
+    trainer = transformers.Trainer(
         model=model,
         args=training_args,
         train_dataset=train_data,
