@@ -4,10 +4,14 @@ from transformers import (
     AutoModelForCausalLM,
     AutoModelForSeq2SeqLM,
     Blip2Config,
+#    Blip2ForConditionalGeneration, 
+#    Blip2QFormerModel
+)
+from src.modeling.modeling_blip_2 import (
     Blip2ForConditionalGeneration,
     Blip2QFormerModel
 )
-from src.modeling.model_ad import VideoCaptionModel
+#from src.modeling.model_ad import VideoCaptionModel
 
 
 class VideoBlipForConditionalGeneration(Blip2ForConditionalGeneration):
