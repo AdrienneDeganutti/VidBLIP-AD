@@ -11,7 +11,6 @@ print(pythonpath)
 sys.path.insert(0, pythonpath)
 
 import torch
-import transformers
 from transformers import Blip2Processor
 
 from src.datasets.frame import FrameDataset
@@ -23,7 +22,9 @@ from src.datasets.utils import (
 from src.modeling.model_blip import VideoBlipForConditionalGeneration
 from configs.load_config import get_custom_args
 
-#PROMPT = "Question: What is the camera wearer doing? Answer:"
+from src.modeling.trainer import Trainer
+
+PROMPT = "Question: What is the camera wearer doing? Answer:"
 
 
 def preprocess(
@@ -35,7 +36,7 @@ def preprocess(
     # tokenize text inputs
     cleaned_narration_text = clean_narration_text(item["captions"])
     preprocessed = generate_input_ids_and_labels(
-        processor.tokenizer, cleaned_narration_text, decoder_only_lm        # PROMPT removed
+        processor.tokenizer, PROMPT, cleaned_narration_text, decoder_only_lm
     )
     preprocessed["pixel_values"] = item["frames"]
 
@@ -95,7 +96,7 @@ def train():
     # Load the best model at the end so we can save it
     training_args.load_best_model_at_end = True
 
-    trainer = transformers.Trainer(
+    trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_data,
