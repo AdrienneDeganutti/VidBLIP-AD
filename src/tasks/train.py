@@ -75,6 +75,7 @@ def train():
     model = model.to(training_args.device)
 
     train_data = FrameDataset(
+        model_args,
         data_args.train_visual_features_dir,
         data_args.train_annotation_file,
         transform=partial(
@@ -84,6 +85,7 @@ def train():
         ),
     )
     val_data = FrameDataset(
+        model_args,
         data_args.val_visual_features_dir,
         data_args.val_annotation_file,
         transform=partial(
