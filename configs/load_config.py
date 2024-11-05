@@ -38,14 +38,20 @@ def get_custom_args(config_file: str):
 
     training_args = TrainingArguments(
         output_dir=config['output_dir'],
+        do_train=config['do_train'],
+        do_eval=config['do_eval'],
         num_train_epochs=config['num_train_epochs'],
         warmup_steps=config['warmup_steps'],
         learning_rate=config['learning_rate'],
+        
         per_device_train_batch_size=config['per_device_train_batch_size'],
         gradient_accumulation_steps=config['gradient_accumulation_steps'],
         weight_decay=config['weight_decay'],
         dataloader_num_workers=config['dataloader_num_workers'],
         bf16=config['bf16'],
+        eval_on_start=config['eval_on_start'],
+        include_inputs_for_metrics=config['include_inputs_for_metrics'],
+        per_device_eval_batch_size=config['per_device_eval_batch_size'],
         eval_strategy=config['eval_strategy'],
         eval_steps=config['eval_steps'],
         save_strategy=config['save_strategy'],
