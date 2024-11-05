@@ -15,6 +15,7 @@ from torch.utils.data import Dataset
 class FrameDataset(Dataset[dict[str, Any]]):
     def __init__(
         self,
+        model_args,
         frames_dir: str,
         annotation_file: str | None = None,
         transform: Callable[[dict[str, Any]], Any] | None = None,
@@ -39,11 +40,12 @@ class FrameDataset(Dataset[dict[str, Any]]):
         self.annotation_file_path = Path(annotation_file)
         assert self.annotation_file_path.exists()
 
-        # Read the TSV file
-        self.df = pd.read_csv(self.annotation_file_path, sep='\t', header=None, names=["id", "captions"])
+        # Read the CSV file
+        self.df = pd.read_csv(self.annotation_file_path, sep='\t', usecols=["text", "cmd_ad_filename"])
 
-        # Convert the 'captions' column from JSON strings to lists of dictionaries
-        self.df['captions'] = self.df['captions'].apply(json.loads)
+        # Convert each text entry into a list of dictionaries
+        #self.df['captions'] = self.df['text'].apply(lambda x: [{"captions": x}])
+        self.df['captions'] = self.df['text'].apply(lambda x: [{x}])
 
         # Filter the data if a filter is provided
         if data_filter is not None:
@@ -51,16 +53,42 @@ class FrameDataset(Dataset[dict[str, Any]]):
 
         # Convert the DataFrame to a list of dictionaries
         self.data = self.df.to_dict('records')
-        self.dict_data = {str(row['id']): row for row in self.data}
+        self.dict_data = {str(row['cmd_ad_filename']): row for row in self.data}
 
         # Read the frame features TSV file manually
         frame_data = []
         with open(self.frames_dir, 'r') as f:
+            current_id = None
+            current_frames = []
+    
             for line in f:
                 parts = line.strip().split('\t')
                 id_str = parts[0]
                 frames = [json.loads(frame) for frame in parts[1:]]
-                frame_data.append({"id": id_str, "frames": frames})
+
+                # Check if we're still on the same ID or a new one
+                if id_str != current_id:
+                    # If we've reached the specified number of frames, save the previous ID's data
+                    if current_id is not None and len(current_frames) == model_args.num_subsample_frames:
+                        frame_data.append({"id": current_id, "frames": current_frames})
+            
+                    # Reset for the new ID
+                    current_id = id_str
+                    current_frames = []
+
+                # Append frames according to num_subsample_frames setting
+                if model_args.num_subsample_frames == 16:
+                    # Load all frames up to 16
+                    if len(current_frames) < 16:
+                        current_frames.extend(frames[:16 - len(current_frames)])
+                elif model_args.num_subsample_frames == 8:
+                    # Load every other frame, selecting 8 in total
+                    if len(current_frames) < 8:
+                        current_frames.extend(frames[::2][:8])
+
+            # Save the last ID's data
+            if len(current_frames) == model_args.num_subsample_frames:
+                frame_data.append({"id": current_id, "frames": current_frames})
 
         self.df_frames = pd.DataFrame(frame_data)
         
