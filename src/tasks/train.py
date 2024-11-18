@@ -1,117 +1,83 @@
-import sys
-import os
-
-from collections.abc import Callable
-from functools import partial
-from typing import Any
-
-pythonpath = os.path.abspath(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-print(pythonpath)
-sys.path.insert(0, pythonpath)
-
 import torch
+from torch.utils.data import DataLoader
 from transformers import Blip2Processor
-
-from src.datasets.frame import FrameDataset
-from src.datasets.utils import (
-    DataCollatorForVideoSeq2Seq,
-    clean_narration_text,
-    generate_input_ids_and_labels,
-)
-from src.modeling.model_blip import VideoBlipForConditionalGeneration
-from configs.load_config import get_custom_args
-
-from src.modeling.trainer import Trainer
-
-PROMPT = "Question: What is the camera wearer doing? Answer:"
+from torch.optim import AdamW
+from functools import partial
 
 
-def preprocess(
-            processor: Blip2Processor,
-            item: dict[str, Any],
-            decoder_only_lm: bool = True
-        ) -> dict[str, torch.Tensor]:
-    
-    # tokenize text inputs
-    cleaned_narration_text = clean_narration_text(item["captions"])
-    preprocessed = generate_input_ids_and_labels(
-        processor.tokenizer, PROMPT, cleaned_narration_text, decoder_only_lm
-    )
-    preprocessed["pixel_values"] = item["frames"]
-
-    return preprocessed
-
-
-
-
-def train():
-    config_file = "configs/training_config.json"
-    model_args, data_args, training_args = get_custom_args(config_file)
-
-    # Don't remove "unused columns" such as clip-related columns
-    training_args.remove_unused_columns = False
-
-    processor = Blip2Processor.from_pretrained(
-        model_args.model_name_or_path
-    )
-    model = VideoBlipForConditionalGeneration.from_pretrained(
-        model_args.model_name_or_path,
-        training_args,
-        #low_cpu_mem_usage=False if is_deepspeed_zero3_enabled() else True,
-        low_cpu_mem_usage=False
+def train(model, train_dataloader, val_dataloader, processor, training_args):
+    """
+    Args:
+        model: The BLIP-2 model.
+        train_dataloader: DataLoader for the training dataset.
+        val_dataloader: DataLoader for the validation dataset.
+        processor: The Blip2Processor for pre-processing.
+        training_args: Training arguments (e.g., learning rate, epochs).
+    """
+    # Optimizer and Scheduler
+    optimizer = AdamW(
+        model.parameters(),
+        lr=training_args.learning_rate,
+        weight_decay=training_args.weight_decay
     )
     
-    # freeze everything except for qformer and vision_model:
-    for param in model.language_model.parameters():
-        param.requires_grad = False
+    num_training_steps = len(train_dataloader) * training_args.num_train_epochs
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_training_steps)
 
-    # ensure that the vision model parameters are trainable:
-    #for param in model.vision_model.parameters():
-    #    param.requires_grad = True
+    device = training_args.device
+    model = model.to(device)
+    
+    # Training Loop
+    for epoch in range(training_args.num_train_epochs):
+        model.train()
+        train_loss = 0.0
 
-    # we need to enable input require grads since the vision model (the first layer) is frozen.
-    model.enable_input_require_grads()
-    model = model.to(training_args.device)
+        for batch_idx, batch in enumerate(train_dataloader):
+            # Move batch to device
+            pixel_values = batch["pixel_values"].to(device)
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
 
-    train_data = FrameDataset(
-        model_args,
-        data_args.train_visual_features_dir,
-        data_args.train_annotation_file,
-        transform=partial(
-            preprocess,
-            processor,
-            decoder_only_lm=model.config.use_decoder_only_language_model
-        ),
-    )
-    val_data = FrameDataset(
-        model_args,
-        data_args.val_visual_features_dir,
-        data_args.val_annotation_file,
-        transform=partial(
-            preprocess,
-            processor,
-            decoder_only_lm=model.config.use_decoder_only_language_model
-        ),
-    )
+            # Forward pass
+            outputs = model(
+                pixel_values=pixel_values,
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                labels=input_ids  # Adjust if different label format is needed
+            )
+            loss = outputs.loss
+            train_loss += loss.item()
 
-    # Load the best model at the end so we can save it
-    training_args.load_best_model_at_end = True
+            # Backward pass and optimization
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+            optimizer.zero_grad()
 
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_data,
-        eval_dataset=val_data,
-        data_collator=DataCollatorForVideoSeq2Seq(
-            processor.tokenizer,
-            pad_to_multiple_of=8 if training_args.fp16 or training_args.bf16 else None,
-        ),
-    )
-    trainer.train(resume_from_checkpoint=training_args.resume_from_checkpoint)
+            # Logging
+            if (batch_idx + 1) % training_args.logging_steps == 0:
+                print(f"Epoch {epoch+1}/{training_args.num_train_epochs}, Step {batch_idx+1}/{len(train_dataloader)}, Loss: {loss.item()}")
+
+        # Validation Loop
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for batch in val_dataloader:
+                pixel_values = batch["pixel_values"].to(device)
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+
+                outputs = model(
+                    pixel_values=pixel_values,
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    labels=input_ids
+                )
+                val_loss += outputs.loss.item()
+
+        print(f"Epoch {epoch+1} Summary: Train Loss = {train_loss/len(train_dataloader)}, Val Loss = {val_loss/len(val_dataloader)}")
+
+    # Save the final model
     model.save_pretrained(training_args.output_dir)
     processor.save_pretrained(training_args.output_dir)
-
-
-if __name__ == "__main__":
-    train()
+    print("Model and processor saved!")
