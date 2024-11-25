@@ -1,7 +1,5 @@
 import sys
 import os
-
-from collections.abc import Callable
 from functools import partial
 from typing import Any
 
@@ -50,9 +48,7 @@ def main():
     # Don't remove "unused columns" such as clip-related columns
     training_args.remove_unused_columns = False
 
-    processor = Blip2Processor.from_pretrained(
-        model_args.model_name_or_path
-    )
+    processor = Blip2Processor.from_pretrained(model_args.model_name_or_path)
     model = VideoBlipForConditionalGeneration.from_pretrained(
         model_args.model_name_or_path,
         training_args,
@@ -66,9 +62,14 @@ def main():
         param.requires_grad = True
     for param in model.vision_projection.parameters():
         param.requires_grad = True
+    for param in model.language_projection.parameters():
+        param.requires_grad = True
     # we need to enable input require grads since the vision model (the first layer) is frozen.
     model.enable_input_require_grads()
     model = model.to(training_args.device)
+
+    for name, param in model.named_parameters():
+        print(f"{name}: requires_grad={param.requires_grad}")
 
 
     train_data = FrameDataset(
