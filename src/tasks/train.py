@@ -1,38 +1,66 @@
 import torch
-from torch.utils.data import DataLoader
-from transformers import Blip2Processor
+import wandb
 from torch.optim import AdamW
-from functools import partial
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
-def train(model, train_dataloader, val_dataloader, processor, training_args):
+def train_epoch(model, train_dataloader, optimizer, scheduler, device):
     """
+    Train the model for one epoch.
     Args:
         model: The BLIP-2 model.
         train_dataloader: DataLoader for the training dataset.
-        val_dataloader: DataLoader for the validation dataset.
-        processor: The Blip2Processor for pre-processing.
-        training_args: Training arguments (e.g., learning rate, epochs).
+        optimizer: Optimizer for gradient updates.
+        scheduler: Learning rate scheduler.
+        device: The device for training (e.g., 'cuda' or 'cpu').
+    Returns:
+        Average training loss for the epoch.
     """
-    # Optimizer and Scheduler
-    optimizer = AdamW(
-        model.parameters(),
-        lr=training_args.learning_rate,
-        weight_decay=training_args.weight_decay
-    )
-    
-    num_training_steps = len(train_dataloader) * training_args.num_train_epochs
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_training_steps)
+    model.train()
+    total_loss = 0.0
 
-    device = training_args.device
-    model = model.to(device)
-    
-    # Training Loop
-    for epoch in range(training_args.num_train_epochs):
-        model.train()
-        train_loss = 0.0
+    for batch in train_dataloader:
+        # Move batch to device
+        pixel_values = batch["pixel_values"].to(device)
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
 
-        for batch_idx, batch in enumerate(train_dataloader):
+        # Forward pass
+        outputs = model(
+            pixel_values=pixel_values,
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=input_ids
+        )
+        loss = outputs.loss
+        total_loss += loss.item()
+
+        # Backward pass and optimization
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad()
+
+    # Compute average loss
+    avg_loss = total_loss / len(train_dataloader)
+    return avg_loss
+
+
+def validate_epoch(model, val_dataloader, device):
+    """
+    Validate the model for one epoch.
+    Args:
+        model: The BLIP-2 model.
+        val_dataloader: DataLoader for the validation dataset.
+        device: The device for evaluation (e.g., 'cuda' or 'cpu').
+    Returns:
+        Average validation loss for the epoch.
+    """
+    model.eval()
+    total_loss = 0.0
+
+    with torch.no_grad():
+        for batch in val_dataloader:
             # Move batch to device
             pixel_values = batch["pixel_values"].to(device)
             input_ids = batch["input_ids"].to(device)
@@ -43,39 +71,57 @@ def train(model, train_dataloader, val_dataloader, processor, training_args):
                 pixel_values=pixel_values,
                 input_ids=input_ids,
                 attention_mask=attention_mask,
-                labels=input_ids  # Adjust if different label format is needed
+                labels=input_ids
             )
             loss = outputs.loss
-            train_loss += loss.item()
+            total_loss += loss.item()
 
-            # Backward pass and optimization
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
-            optimizer.zero_grad()
+    # Compute average loss
+    avg_loss = total_loss / len(val_dataloader)
+    return avg_loss
 
-            # Logging
-            if (batch_idx + 1) % training_args.logging_steps == 0:
-                print(f"Epoch {epoch+1}/{training_args.num_train_epochs}, Step {batch_idx+1}/{len(train_dataloader)}, Loss: {loss.item()}")
 
-        # Validation Loop
-        model.eval()
-        val_loss = 0.0
-        with torch.no_grad():
-            for batch in val_dataloader:
-                pixel_values = batch["pixel_values"].to(device)
-                input_ids = batch["input_ids"].to(device)
-                attention_mask = batch["attention_mask"].to(device)
+def train(model, train_dataloader, val_dataloader, processor, training_args):
+    """
+    Train and validate the BLIP-2 model.
+    Args:
+        model: The BLIP-2 model.
+        train_dataloader: DataLoader for the training dataset.
+        val_dataloader: DataLoader for the validation dataset.
+        processor: The Blip2Processor for pre-processing.
+        training_args: Training arguments (e.g., learning rate, epochs).
+    """
+    # Optimizer and Scheduler
+    optimizer = AdamW(
+        filter(lambda p: p.requires_grad, model.parameters()),
+        lr=training_args.learning_rate,
+        weight_decay=training_args.weight_decay
+    )
+    num_training_steps = len(train_dataloader) * training_args.num_train_epochs
+    scheduler = CosineAnnealingLR(optimizer, T_max=num_training_steps)
 
-                outputs = model(
-                    pixel_values=pixel_values,
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    labels=input_ids
-                )
-                val_loss += outputs.loss.item()
+    # Device setup
+    device = training_args.device
+    model = model.to(device)
 
-        print(f"Epoch {epoch+1} Summary: Train Loss = {train_loss/len(train_dataloader)}, Val Loss = {val_loss/len(val_dataloader)}")
+    # WandB initialization
+    wandb.init(project="blip2-ad", name="Vision+Lang Proj Frozen",
+               config=vars(training_args))
+
+    # Training Loop
+    for epoch in range(training_args.num_train_epochs):
+        print(f"Epoch {epoch + 1}/{training_args.num_train_epochs}")
+
+        # Train
+        avg_train_loss = train_epoch(model, train_dataloader, optimizer, scheduler, device)
+        print(f"Train Loss: {avg_train_loss:.4f}")
+
+        # Validate
+        avg_val_loss = validate_epoch(model, val_dataloader, device)
+        print(f"Validation Loss: {avg_val_loss:.4f}")
+
+        # Log average losses to WandB
+        wandb.log({"train_loss": avg_train_loss, "validation_loss": avg_val_loss})
 
     # Save the final model
     model.save_pretrained(training_args.output_dir)
