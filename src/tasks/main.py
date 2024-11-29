@@ -11,7 +11,6 @@ sys.path.insert(0, pythonpath)
 import torch
 from transformers import Blip2Processor
 
-from src.tasks.train import train
 from src.datasets.frame import FrameDataset
 from src.datasets.utils import (
     DataCollatorForVideoSeq2Seq,
@@ -20,8 +19,8 @@ from src.datasets.utils import (
 )
 from src.modeling.model_blip import VideoBlipForConditionalGeneration
 from configs.load_config import get_custom_args
-
 from src.modeling.trainer import Trainer
+from src.tasks.train import Train
 
 PROMPT = "Please provide a detailed description of this movie clip."
 
@@ -68,10 +67,10 @@ def main():
     model.enable_input_require_grads()
     model = model.to(training_args.device)
 
-    for name, param in model.named_parameters():
-        print(f"{name}: requires_grad={param.requires_grad}")
+    #for name, param in model.named_parameters():
+    #    print(f"{name}: requires_grad={param.requires_grad}")
 
-
+    print('loading training dataset')
     train_data = FrameDataset(
         model_args,
         data_args.train_visual_features_dir,
@@ -94,10 +93,9 @@ def main():
         ),
     )
 
-    # Load the best model at the end so we can save it
     training_args.load_best_model_at_end = True
 
-    trainer = Trainer(
+    dataloader = Trainer(           # Using transformers Trainer for the dataloader only
         model=model,
         args=training_args,
         train_dataset=train_data,
@@ -108,11 +106,12 @@ def main():
         ),
     )
 
-    train_dataloader = trainer.get_train_dataloader()
-    val_dataloader = trainer.get_eval_dataloader(val_data)
+    train_dataloader = dataloader.get_train_dataloader()
+    val_dataloader = dataloader.get_eval_dataloader(val_data)
+    training_args.max_iter = len(train_dataloader)
 
-    if training_args.do_train:
-        train(model, train_dataloader, val_dataloader, processor, training_args)
+    trainer = Train(training_args, model, processor, val_dataloader, train_dataloader)
+    trainer.train()
     
     #trainer.train(resume_from_checkpoint=training_args.resume_from_checkpoint)
     model.save_pretrained(training_args.output_dir)
