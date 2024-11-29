@@ -23,17 +23,7 @@ def mixed_precision_init(training_args, model, train_dataloader):
 
 
 def train_epoch(training_args, model, train_dataloader, optimizer, scheduler):
-    """
-    Train the model for one epoch.
-    Args:
-        model: The BLIP-2 model.
-        train_dataloader: DataLoader for the training dataset.
-        optimizer: Optimizer for gradient updates.
-        scheduler: Learning rate scheduler.
-        device: The device for training (e.g., 'cuda' or 'cpu').
-    Returns:
-        Average training loss for the epoch.
-    """
+
     model.train()
     total_loss = 0.0
 
@@ -70,15 +60,7 @@ def train_epoch(training_args, model, train_dataloader, optimizer, scheduler):
 
 
 def train(model, processor, train_dataloader, val_dataloader, training_args):
-    """
-    Train and validate the BLIP-2 model.
-    Args:
-        model: The BLIP-2 model.
-        train_dataloader: DataLoader for the training dataset.
-        val_dataloader: DataLoader for the validation dataset.
-        processor: The Blip2Processor for pre-processing.
-        training_args: Training arguments (e.g., learning rate, epochs).
-    """
+
     # Optimizer and Scheduler
     optimizer, num_training_steps, scheduler = mixed_precision_init(training_args, model, train_dataloader)
 
