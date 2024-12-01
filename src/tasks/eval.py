@@ -1,8 +1,11 @@
 import torch
 import wandb
 
-from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
-from rouge_score import rouge_scorer
+from eval_metrics.pycocoevalcap.tokenizer.ptbtokenizer import PTBTokenizer
+from eval_metrics.pycocoevalcap.bleu.bleu import Bleu
+from eval_metrics.pycocoevalcap.meteor.meteor import Meteor
+from eval_metrics.pycocoevalcap.rouge.rouge import Rouge
+from eval_metrics.pycocoevalcap.cider.cider import Cider
 
 class Evaluation:
     def __init__(self, training_args, model, processor, val_dataloader, train_dataloader):
@@ -57,62 +60,44 @@ class Evaluation:
         predicted_tokens = predicted_tokens.cpu().tolist()
         references = references.cpu().tolist()
 
-        bleu_scores = self.BLEU(predicted_tokens, references)
-        rouge_score = self.ROUGE(predicted_tokens, references)
+        # Prepare data for pycocoevalcap
+        res = {}
+        gts = {}
 
-
-    def BLEU(self, predicted_tokens, references):
-
-        weights = [                     # Calculate BLEU-1, BLEU-2, BLEU-3 and BLEU-4 simultaneously
-            (1.,),
-            (1./2., 1./2.),
-            (1./3., 1./3., 1./3.),
-            (1./4., 1./4., 1./4., 1./4.)
-        ]
-
-        bleu_scores = {f"bleu-{i+1}": [] for i in range(len(weights))}
-
-        for pred, ref in zip(predicted_tokens, references):
-            # Filter out padding tokens (assumes padding token is -100)
+        for idx, (pred, ref) in enumerate(zip(predicted_tokens, references)):
+            # Filter out padding tokens
             pred = [token for token in pred if token != -100]
             ref = [token for token in ref if token != -100]
 
-            for i, weight in enumerate(weights):
-                score = sentence_bleu(
-                    [ref], pred,
-                    weights=weight,
-                    smoothing_function=SmoothingFunction().method1
-                )
-                bleu_scores[f"bleu-{i+1}"].append(score)
+            # Decode token indices to text
+            pred_text = self.processor.decode(pred, skip_special_tokens=True).strip()
+            ref_text = self.processor.decode(ref, skip_special_tokens=True).strip()
 
-        # Average BLEU scores across the batch
-        avg_bleu_scores = {key: sum(values) / len(values) for key, values in bleu_scores.items()}
+            # Populate result and ground truth dictionaries
+            res[idx] = [{"caption": pred_text}]
+            gts[idx] = [{"caption": ref_text}]
 
-        return avg_bleu_scores
-    
+        # Tokenize using PTBTokenizer
+        tokenizer = PTBTokenizer()
+        gts = tokenizer.tokenize(gts)
+        res = tokenizer.tokenize(res)
 
-    def ROUGE(self, predicted_tokens, references):
-         # Initialize ROUGE scorer
-        scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
+        # Initialize scorers
+        scorers = [
+            (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
+            (Meteor(), "METEOR"),
+            (Rouge(), "ROUGE_L"),
+            (Cider(), "CIDEr"),
+        ]
 
-        # Accumulator for ROUGE-L scores
-        rouge_l_scores = []
+        # Compute scores
+        scores = {}
+        for scorer, method in scorers:
+            score, _ = scorer.compute_score(gts, res)
+            if isinstance(method, list):  # BLEU returns multiple scores
+                for m, s in zip(method, score):
+                    scores[m] = s
+            else:
+                scores[method] = score
 
-        for pred, ref in zip(predicted_tokens, references):
-            # Filter out padding tokens (assumes padding token is 0)
-            pred = [token for token in pred if token != 0]
-            ref = [token for token in ref if token != 0]
-
-            # Convert token indices to strings for ROUGE computation
-            pred_text = " ".join(map(str, pred))
-            ref_text = " ".join(map(str, ref))
-
-            # Compute ROUGE-L score
-            score = scorer.score(ref_text, pred_text)
-            rouge_l_scores.append(score["rougeL"].fmeasure)
-
-        # Average ROUGE-L score across the batch
-        avg_rouge_l_score = sum(rouge_l_scores) / len(rouge_l_scores)
-
-        return {"rougeL": avg_rouge_l_score}
-
+        return scores
