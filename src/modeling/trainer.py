@@ -32,23 +32,20 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset, IterableDataset, RandomSampler, SequentialSampler
 
 from transformers import __version__
+from transformers import Blip2Processor
 from transformers.configuration_utils import PretrainedConfig
 from transformers.data.data_collator import DataCollator, DataCollatorWithPadding, default_data_collator
 from transformers.debug_utils import DebugOption, DebugUnderflowOverflow
 from transformers.feature_extraction_sequence_utils import SequenceFeatureExtractor
-from transformers.hyperparameter_search import ALL_HYPERPARAMETER_SEARCH_BACKENDS, default_hp_search_backend
-from transformers.integrations.deepspeed import deepspeed_init, deepspeed_load_checkpoint, is_deepspeed_available
 from transformers.integrations.tpu import tpu_spmd_dataloader
 from transformers.modeling_utils import PreTrainedModel, load_sharded_checkpoint
 from transformers.models.auto.modeling_auto import (
-    MODEL_FOR_CAUSAL_LM_MAPPING_NAMES,
-    MODEL_MAPPING_NAMES,
+    MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
 )
 from transformers.optimization import Adafactor, get_scheduler
 from transformers.pytorch_utils import (
     ALL_LAYERNORM_LAYERS,
-    is_torch_greater_or_equal_than_1_13,
-    is_torch_greater_or_equal_than_2_3,
+    is_torch_greater_or_equal_than_1_13
 )
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from transformers.trainer_callback import (
@@ -140,7 +137,6 @@ if is_accelerate_available():
         DistributedDataParallelKwargs,
         DistributedType,
         GradientAccumulationPlugin,
-        load_fsdp_model,
         load_fsdp_optimizer,
         save_fsdp_model,
         save_fsdp_optimizer,
@@ -1438,8 +1434,8 @@ class Trainer:
             self.lr_scheduler = None
             self._created_lr_scheduler = False
 
-        if self.is_deepspeed_enabled:
-            self.optimizer, self.lr_scheduler = deepspeed_init(self, num_training_steps=max_steps)
+        #if self.is_deepspeed_enabled:
+        #    self.optimizer, self.lr_scheduler = deepspeed_init(self, num_training_steps=max_steps)
 
         if not delay_optimizer_creation:
             self.create_optimizer_and_scheduler(num_training_steps=max_steps)
@@ -1967,6 +1963,11 @@ class Trainer:
         else:
             labels = None
         outputs = model(**inputs)
+
+        processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
+        decoded_text = processor.decode(outputs.logits, skip_special_tokens=True).strip()
+        print(decoded_text)
+
         # Save past state if it exists
         # TODO: this needs to be fixed and made cleaner later.
         if self.args.past_index >= 0:
@@ -2856,8 +2857,8 @@ class Trainer:
         prediction_loss_only = prediction_loss_only if prediction_loss_only is not None else args.prediction_loss_only
 
         # if eval is called w/o train, handle model prep here
-        if self.is_deepspeed_enabled and self.deepspeed is None:
-            _, _ = deepspeed_init(self, num_training_steps=0, inference=True)
+        #if self.is_deepspeed_enabled and self.deepspeed is None:
+        #    _, _ = deepspeed_init(self, num_training_steps=0, inference=True)
 
         model = self._wrap_model(self.model, training=False, dataloader=dataloader)
 
@@ -2868,16 +2869,9 @@ class Trainer:
                 else self.accelerator.prepare_model(model, evaluation_mode=True)
             )
 
-            if self.is_fsdp_enabled:
-                self.model = model
-
             # for the rest of this function `model` is the outside model, whether it was wrapped or not
             if model is not self.model:
                 self.model_wrapped = model
-
-            # backward compatibility
-            if self.is_deepspeed_enabled:
-                self.deepspeed = self.model_wrapped
 
         # if full fp16 or bf16 eval is wanted and this ``evaluation`` or ``predict`` isn't called
         # while ``train`` is running, cast it to the right dtype first and then put on device
@@ -3066,8 +3060,8 @@ class Trainer:
         prediction_loss_only = prediction_loss_only if prediction_loss_only is not None else args.prediction_loss_only
 
         # if eval is called w/o train, handle model prep here
-        if self.is_deepspeed_enabled and self.deepspeed is None:
-            _, _ = deepspeed_init(self, num_training_steps=0, inference=True)
+        #if self.is_deepspeed_enabled and self.deepspeed is None:
+        #    _, _ = deepspeed_init(self, num_training_steps=0, inference=True)
 
         model = self._wrap_model(self.model, training=False, dataloader=dataloader)
 
