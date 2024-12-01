@@ -39,6 +39,10 @@ class Train:
         self.model.train()
         total_loss = 0.0
 
+        if self.args.include_for_metrics:
+            total_metrics = {name: 0.0 for name in ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']}
+            batch_count = 0
+
 
         for batch in self.train_dataloader:
             pixel_values = batch["pixel_values"]
@@ -54,11 +58,17 @@ class Train:
             )
             loss = outputs.loss
             total_loss += loss.item()
-            wandb.log({"train_step_loss": loss})
+            wandb.log({"train_batch_loss": loss})
 
             if self.args.include_for_metrics:
-                train_step_acc = self.evaluation.compute_metrics(outputs, batch)
+                train_batch_metrics = self.evaluation.compute_metrics(outputs, batch)
+                metric_names = ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']
+                log_metrics = {f"train_batch_{name}": train_batch_metrics[name] for name in metric_names}
+                wandb.log(log_metrics)
 
+                for name in metric_names:
+                    total_metrics[name] += train_batch_metrics[name]
+                batch_count += 1
 
             # Backward pass and optimization
             loss.backward()
@@ -68,7 +78,9 @@ class Train:
 
         # Compute average loss
         avg_loss = total_loss / len(self.train_dataloader)
-        return avg_loss
+        avg_metrics = {f"train_epoch_avg_{name}": total_metrics[name] / batch_count if batch_count > 0 else 0.0 for name in metric_names}
+
+        return avg_loss, avg_metrics
 
 
     def train(self):
@@ -87,23 +99,22 @@ class Train:
 
             if epoch == 0 & self.args.eval_on_start & self.args.do_eval:
                 logger.info('Performing initial validation at epoch 0.')
-                epoch_0_val_acc, epoch_0_val_loss = self.evaluation.evaluate(self.args.output_dir, epoch)
+                epoch_0_val_loss, epoch_0_val_acc = self.evaluation.evaluate(self.args.output_dir, epoch)
                 logger.info(f"Epoch 0 Validation Accuracy: {epoch_0_val_acc}")
-                wandb.log({"validation_loss": epoch_0_val_loss})
+                wandb.log({"validation_epoch_loss": epoch_0_val_loss})
 
             logger.info(f"Epoch {epoch + 1}/{self.args.num_train_epochs}")
 
-            avg_train_loss = self.train_epoch(optimizer, scheduler)
+            avg_train_loss, avg_train_metrics = self.train_epoch(optimizer, scheduler)
             logger.info(f"Train Loss: {avg_train_loss:.4f}")
+            wandb.log({"train_epoch_loss": avg_train_loss})
+            wandb.log(avg_train_metrics)
 
             if self.args.do_eval:       #evaluate at every epoch
-                avg_val_acc, avg_val_loss = self.evaluation.evaluate(self.args.output_dir, epoch)
-                logger.info(f"Validation Loss: {avg_val_loss:.4f}")
-
-            wandb.log({"train_loss": avg_train_loss, "validation_loss": avg_val_loss,
-                        "train_accuracy": avg_train_acc, "validation_accuracy": avg_val_acc})
+                avg_val_loss, avg_val_metrics = self.evaluation.evaluate(self.args.output_dir, epoch)
+                wandb.log(avg_val_metrics) 
+                wandb.log({"validation_epoch_loss": avg_val_loss})
     
-
         total_training_time = time.time() - start_training_time
         total_time_str = str(timedelta(seconds=total_training_time))
         logger.info(f'Total training time: {total_time_str} ({(total_training_time / self.args.max_iter):.4f} s / iter)')

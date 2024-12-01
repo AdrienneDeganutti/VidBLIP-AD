@@ -1,11 +1,13 @@
 import torch
 import wandb
+import builtins
 
 from eval_metrics.pycocoevalcap.tokenizer.ptbtokenizer import PTBTokenizer
 from eval_metrics.pycocoevalcap.bleu.bleu import Bleu
 from eval_metrics.pycocoevalcap.meteor.meteor import Meteor
 from eval_metrics.pycocoevalcap.rouge.rouge import Rouge
 from eval_metrics.pycocoevalcap.cider.cider import Cider
+
 
 class Evaluation:
     def __init__(self, training_args, model, processor, val_dataloader, train_dataloader):
@@ -19,6 +21,10 @@ class Evaluation:
     def evaluate(self, output_dir, epoch):
         self.model.eval()
         total_loss = 0.0
+
+        if self.args.include_for_metrics:
+            total_metrics = {name: 0.0 for name in ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']}
+            batch_count = 0
 
         with torch.no_grad():
             for batch in self.val_dataloader:
@@ -36,7 +42,17 @@ class Evaluation:
                 loss = outputs.loss
                 total_loss += loss.item()
 
-                wandb.log({"val_step_loss": loss})
+                wandb.log({"val_batch_loss": loss})
+
+                if self.args.include_for_metrics:
+                    val_batch_metrics = self.compute_metrics(outputs, batch)
+                    metric_names = ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']
+                    log_metrics = {f"val_batch_{name}": val_batch_metrics[name] for name in metric_names}
+                    wandb.log(log_metrics)
+
+                    for name in metric_names:
+                        total_metrics[name] += val_batch_metrics[name]
+                    batch_count += 1
         
             #logits = torch.max(outputs.logits, -1)[1].data
             #decoded_text = self.processor.decode(logits, skip_special_tokens=True).strip()
@@ -44,8 +60,9 @@ class Evaluation:
 
         # Compute average loss
         avg_loss = total_loss / len(self.val_dataloader)
-        avg_acc = 1
-        return avg_acc, avg_loss
+        avg_metrics = {f"val_epoch_avg_{name}": total_metrics[name] / batch_count if batch_count > 0 else 0.0 for name in metric_names}
+
+        return avg_loss, avg_metrics
     
 
     def compute_metrics(self, outputs, batch):
@@ -77,7 +94,6 @@ class Evaluation:
             res[idx] = [{"caption": pred_text}]
             gts[idx] = [{"caption": ref_text}]
 
-        # Tokenize using PTBTokenizer
         tokenizer = PTBTokenizer()
         gts = tokenizer.tokenize(gts)
         res = tokenizer.tokenize(res)
