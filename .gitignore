@@ -153,5 +153,6 @@ wandb/
 output/
 
 
-eval_metrics/pycocoevalcap/
+/eval_metrics/pycocoevalcap/
+/eval_metrics/llm_ad_eval_gpt.py
 
