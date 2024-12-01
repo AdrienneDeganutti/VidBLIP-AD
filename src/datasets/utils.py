@@ -93,7 +93,7 @@ def clean_narration_text(narration_text: str) -> str:
 
 
 def generate_input_ids_and_labels(
-    tokenizer: PreTrainedTokenizer, text: str, decoder_only_lm: bool
+    tokenizer: PreTrainedTokenizer, prompt:str, text: str, decoder_only_lm: bool
 ) -> BatchEncoding:
     """Generate input ids and labels from the given prompt and text. If
     decoder_only_lm is True, the input and label texts are the same, but label
@@ -107,10 +107,9 @@ def generate_input_ids_and_labels(
     :param decoder_only_lm: whether the LLM is decoder only or not
     :returns: preprocessed results
     """
-    # AMENDMENTS MADE TO NO LONGER TAKE AN INPUT PROMPT #
     if decoder_only_lm:
         # tokenize prompt first
-        #prompt_tokens = tokenizer(prompt, return_attention_mask=False).input_ids
+        prompt_tokens = tokenizer(prompt, return_attention_mask=False).input_ids
 
         # tokenize the narration and append eos
         preprocessed = tokenizer(
@@ -121,13 +120,13 @@ def generate_input_ids_and_labels(
         preprocessed["input_ids"].append(tokenizer.eos_token_id)
 
         # join tokenized prompt and narration text
-        #preprocessed["input_ids"] = prompt_tokens + preprocessed["input_ids"]
+        preprocessed["input_ids"] = prompt_tokens + preprocessed["input_ids"]
         preprocessed["input_ids"] = torch.tensor(preprocessed.input_ids)
 
         # for decoder only LMs, labels are same as input_ids, but we mask
         # tokens for the prompt
         preprocessed["labels"] = preprocessed["input_ids"].clone()
-        #preprocessed["labels"][: len(prompt_tokens)] = -100
+        preprocessed["labels"][: len(prompt_tokens)] = -100
     else:
         # eos is automatically appended by the tokenizer
         # we don't use return_tensors='pt' here b/c it automatically batchifies things
