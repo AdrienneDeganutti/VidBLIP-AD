@@ -9,6 +9,7 @@ print(pythonpath)
 sys.path.insert(0, pythonpath)
 
 import torch
+import psutil
 from transformers import Blip2Processor
 from src.utils.logger import LOGGER as logger
 from src.datasets.frame import FrameDataset
@@ -23,6 +24,20 @@ from src.modeling.trainer import Trainer
 from src.tasks.train import Train
 
 PROMPT = "Please provide a detailed description of this movie clip."
+
+def print_cpu_memory():
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    print(f"CPU memory used: {memory_info.rss / 1024 ** 2:.2f} MB")  # rss is the resident set size
+
+def print_gpu_memory():
+    if torch.cuda.is_available():
+        gpu_memory_allocated = torch.cuda.memory_allocated() / 1024 ** 2  # Convert bytes to MB
+        gpu_memory_reserved = torch.cuda.memory_reserved() / 1024 ** 2  # Convert bytes to MB
+        print(f"GPU memory allocated: {gpu_memory_allocated:.2f} MB")
+        print(f"GPU memory reserved: {gpu_memory_reserved:.2f} MB")
+    else:
+        print("No GPU available.")
 
 
 def preprocess(
@@ -65,7 +80,9 @@ def main():
         param.requires_grad = True
     # we need to enable input require grads since the vision model (the first layer) is frozen.
     model.enable_input_require_grads()
+    logger.info('Moving model to device...')
     model = model.to(training_args.device)
+    print_gpu_memory()
 
     #for name, param in model.named_parameters():
     #    print(f"{name}: requires_grad={param.requires_grad}")
@@ -81,6 +98,7 @@ def main():
             decoder_only_lm=model.config.use_decoder_only_language_model
         ),
     )
+    print_cpu_memory()
     
     logger.info('Loading validation dataset...')
     val_data = FrameDataset(
@@ -93,6 +111,7 @@ def main():
             decoder_only_lm=model.config.use_decoder_only_language_model
         ),
     )
+    print_cpu_memory()
 
     training_args.load_best_model_at_end = True
 
