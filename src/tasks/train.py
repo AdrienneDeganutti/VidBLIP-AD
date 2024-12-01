@@ -78,9 +78,12 @@ class Train:
 
         # Compute average loss
         avg_loss = total_loss / len(self.train_dataloader)
-        avg_metrics = {f"train_epoch_avg_{name}": total_metrics[name] / batch_count if batch_count > 0 else 0.0 for name in metric_names}
 
-        return avg_loss, avg_metrics
+        if self.args.include_for_metrics:
+            avg_metrics = {f"train_epoch_avg_{name}": total_metrics[name] / batch_count if batch_count > 0 else 0.0 for name in metric_names}
+            return avg_loss, avg_metrics
+        else:
+            return avg_loss
 
 
     def train(self):
@@ -97,7 +100,7 @@ class Train:
         # Training Loop
         for epoch in range(self.args.num_train_epochs):
 
-            if epoch == 0 & self.args.eval_on_start & self.args.do_eval:
+            if epoch == 0 and self.args.eval_on_start and self.args.do_eval:
                 logger.info('Performing initial validation at epoch 0.')
                 epoch_0_val_loss, epoch_0_val_acc = self.evaluation.evaluate(self.args.output_dir, epoch)
                 logger.info(f"Epoch 0 Validation Accuracy: {epoch_0_val_acc}")
@@ -105,14 +108,21 @@ class Train:
 
             logger.info(f"Epoch {epoch + 1}/{self.args.num_train_epochs}")
 
-            avg_train_loss, avg_train_metrics = self.train_epoch(optimizer, scheduler)
+            if self.args.include_for_metrics:
+                avg_train_loss, avg_train_metrics = self.train_epoch(optimizer, scheduler)
+                wandb.log(avg_train_metrics)
+            else:
+                avg_train_loss = self.train_epoch(optimizer, scheduler)
             logger.info(f"Train Loss: {avg_train_loss:.4f}")
             wandb.log({"train_epoch_loss": avg_train_loss})
-            wandb.log(avg_train_metrics)
 
-            if self.args.do_eval:       #evaluate at every epoch
+            if self.args.do_eval and self.args.include_for_metrics:       #evaluate at every epoch
                 avg_val_loss, avg_val_metrics = self.evaluation.evaluate(self.args.output_dir, epoch)
                 wandb.log(avg_val_metrics) 
+                wandb.log({"validation_epoch_loss": avg_val_loss})
+            
+            if self.args.do_eval:
+                avg_val_loss = self.evaluation.evaluate(self.args.output_dir, epoch)
                 wandb.log({"validation_epoch_loss": avg_val_loss})
     
         total_training_time = time.time() - start_training_time

@@ -1,7 +1,6 @@
 import torch
 import wandb
-import builtins
-
+from src.utils.log_predictions import PredictionLogger
 from eval_metrics.pycocoevalcap.tokenizer.ptbtokenizer import PTBTokenizer
 from eval_metrics.pycocoevalcap.bleu.bleu import Bleu
 from eval_metrics.pycocoevalcap.meteor.meteor import Meteor
@@ -16,6 +15,8 @@ class Evaluation:
         self.processor = processor 
         self.val_dataloader = val_dataloader
         self.train_dataloader = train_dataloader
+        
+        self.log_predictions = PredictionLogger(output_csv_path=training_args.output_dir)
 
 
     def evaluate(self, output_dir, epoch):
@@ -53,6 +54,9 @@ class Evaluation:
                     for name in metric_names:
                         total_metrics[name] += val_batch_metrics[name]
                     batch_count += 1
+                
+                #if self.args.per_device_train_batch_size == 1:
+                    #self.log_predictions.log(id, batch['labels'], outputs['logits'])
         
             #logits = torch.max(outputs.logits, -1)[1].data
             #decoded_text = self.processor.decode(logits, skip_special_tokens=True).strip()
@@ -60,9 +64,11 @@ class Evaluation:
 
         # Compute average loss
         avg_loss = total_loss / len(self.val_dataloader)
-        avg_metrics = {f"val_epoch_avg_{name}": total_metrics[name] / batch_count if batch_count > 0 else 0.0 for name in metric_names}
-
-        return avg_loss, avg_metrics
+        if self.args.include_for_metrics:
+            avg_metrics = {f"val_epoch_avg_{name}": total_metrics[name] / batch_count if batch_count > 0 else 0.0 for name in metric_names}
+            return avg_loss, avg_metrics
+        else:
+            return avg_loss
     
 
     def compute_metrics(self, outputs, batch):
