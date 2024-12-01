@@ -44,8 +44,8 @@ class FrameDataset(Dataset[dict[str, Any]]):
         self.df = pd.read_csv(self.annotation_file_path, sep='\t', usecols=["text", "cmd_ad_filename"])
 
         # Convert each text entry into a list of dictionaries
-        #self.df['captions'] = self.df['text'].apply(lambda x: [{"captions": x}])
-        self.df['captions'] = self.df['text'].apply(lambda x: [{x}])
+        self.df['captions'] = self.df['text'].apply(lambda x: [{"caption": x}])
+        #self.df['captions'] = self.df['text'].apply(lambda x: [{x}])
 
         # Filter the data if a filter is provided
         if data_filter is not None:
@@ -106,9 +106,9 @@ class FrameDataset(Dataset[dict[str, Any]]):
         item = {**datapoint}
 
         if self.return_frames:
-            frame_datapoint = self.dict_data_frames.get(str(datapoint['id']), None)
+            frame_datapoint = self.dict_data_frames.get(str(datapoint['cmd_ad_filename']), None)
             if frame_datapoint is None:
-                raise FileNotFoundError(f"Frame data not found for ID: {datapoint['id']}")
+                raise FileNotFoundError(f"Frame data not found for ID: {datapoint['cmd_ad_filename']}")
             frames = torch.tensor(frame_datapoint['frames'])  # Assuming frames are saved as JSON-encoded lists
             item["frames"] = frames
 
