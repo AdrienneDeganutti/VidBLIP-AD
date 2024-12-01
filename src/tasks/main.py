@@ -10,7 +10,7 @@ sys.path.insert(0, pythonpath)
 
 import torch
 from transformers import Blip2Processor
-
+from src.utils.logger import LOGGER as logger
 from src.datasets.frame import FrameDataset
 from src.datasets.utils import (
     DataCollatorForVideoSeq2Seq,
@@ -70,7 +70,7 @@ def main():
     #for name, param in model.named_parameters():
     #    print(f"{name}: requires_grad={param.requires_grad}")
 
-    print('loading training dataset')
+    logger.info('Loading training dataset...')
     train_data = FrameDataset(
         model_args,
         data_args.train_visual_features_dir,
@@ -82,6 +82,7 @@ def main():
         ),
     )
     
+    logger.info('Loading validation dataset...')
     val_data = FrameDataset(
         model_args,
         data_args.val_visual_features_dir,
