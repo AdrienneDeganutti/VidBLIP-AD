@@ -58,9 +58,9 @@ class Evaluation:
                 #if self.args.per_device_train_batch_size == 1:
                     #self.log_predictions.log(id, batch['labels'], outputs['logits'])
         
-            #logits = torch.max(outputs.logits, -1)[1].data
-            #decoded_text = self.processor.decode(logits, skip_special_tokens=True).strip()
-            #print(decoded_text)
+                logits = torch.max(outputs.logits, -1)[1].data
+                decoded_text = self.processor.decode(logits[0], skip_special_tokens=True).strip()
+                print(decoded_text)
 
         # Compute average loss
         avg_loss = total_loss / len(self.val_dataloader)
