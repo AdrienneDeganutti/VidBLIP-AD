@@ -50,7 +50,7 @@ def get_custom_args(config_file: str):
         dataloader_num_workers=config['dataloader_num_workers'],
         bf16=config['bf16'],
         eval_on_start=config['eval_on_start'],
-        include_inputs_for_metrics=config['include_inputs_for_metrics'],
+        include_for_metrics=config['include_for_metrics'],
         per_device_eval_batch_size=config['per_device_eval_batch_size'],
         eval_strategy=config['eval_strategy'],
         eval_steps=config['eval_steps'],
