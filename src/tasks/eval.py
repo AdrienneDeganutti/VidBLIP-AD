@@ -16,7 +16,7 @@ class Evaluation:
         self.val_dataloader = val_dataloader
         self.train_dataloader = train_dataloader
         
-        self.log_predictions = PredictionLogger(output_csv_path=training_args.output_dir)
+        self.log_predictions = PredictionLogger(processor, output_csv_path=training_args.output_dir)
 
 
     def evaluate(self, output_dir, epoch):
@@ -24,14 +24,17 @@ class Evaluation:
         total_loss = 0.0
 
         if self.args.include_for_metrics:
-            total_metrics = {name: 0.0 for name in ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']}
+            #total_metrics = {name: 0.0 for name in ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']}
             batch_count = 0
 
         with torch.no_grad():
             for batch in self.val_dataloader:
+                video_id = batch["filenames"]
+                batch = {key: value.to(self.args.device) for key, value in batch.items() if isinstance(value, torch.Tensor)}
                 pixel_values = batch["pixel_values"]
                 input_ids = batch["input_ids"]
                 attention_mask = batch["attention_mask"]
+                labels = batch["labels"] 
 
                 # Forward pass
                 outputs = self.model(
@@ -45,30 +48,23 @@ class Evaluation:
 
                 wandb.log({"val_batch_loss": loss})
 
-                if self.args.include_for_metrics:
+                if batch_count == 0 and epoch % 3 == 0 and epoch != 0:
                     val_batch_metrics = self.compute_metrics(outputs, batch)
                     metric_names = ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']
                     log_metrics = {f"val_batch_{name}": val_batch_metrics[name] for name in metric_names}
                     wandb.log(log_metrics)
-
-                    for name in metric_names:
-                        total_metrics[name] += val_batch_metrics[name]
                     batch_count += 1
                 
-                #if self.args.per_device_train_batch_size == 1:
-                    #self.log_predictions.log(id, batch['labels'], outputs['logits'])
-        
-                logits = torch.max(outputs.logits, -1)[1].data
-                decoded_text = self.processor.decode(logits[0], skip_special_tokens=True).strip()
-                print(decoded_text)
+                    if self.args.per_device_train_batch_size == 1:
+                        self.log_predictions.log(video_id, outputs['logits'])
+                    elif self.args.per_device_train_batch_size > 1:
+                        self.log_predictions.log_batch(video_id, outputs['logits'], epoch)
+
 
         # Compute average loss
         avg_loss = total_loss / len(self.val_dataloader)
-        if self.args.include_for_metrics:
-            avg_metrics = {f"val_epoch_avg_{name}": total_metrics[name] / batch_count if batch_count > 0 else 0.0 for name in metric_names}
-            return avg_loss, avg_metrics
-        else:
-            return avg_loss
+
+        return avg_loss
     
 
     def compute_metrics(self, outputs, batch):
