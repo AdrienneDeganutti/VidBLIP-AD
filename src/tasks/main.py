@@ -126,7 +126,7 @@ def main():
         train_data,
         batch_size=training_args.per_device_train_batch_size,
         collate_fn=data_collator,
-        shuffle=True,
+        shuffle=False,
     )
     training_args.max_iter = len(train_dataloader)
 
@@ -134,7 +134,7 @@ def main():
         val_data,
         batch_size=training_args.per_device_train_batch_size,
         collate_fn=data_collator,
-        shuffle=True,
+        shuffle=False,
     )
 
     trainer = Train(training_args, model, processor, val_dataloader, train_dataloader)
