@@ -18,6 +18,7 @@ UNSURE_MIDDLE_REGEX = re.compile(r"#unsure", re.IGNORECASE)
 
 class DataCollatorForVideoSeq2Seq(DataCollatorForSeq2Seq):
     def __call__(self, features, return_tensors=None):
+        filenames = [feature.pop("video_id") for feature in features]
         if all("pixel_values" in feature for feature in features):
             pixel_values = torch.stack(
                 [feature.pop("pixel_values") for feature in features]
@@ -29,6 +30,7 @@ class DataCollatorForVideoSeq2Seq(DataCollatorForSeq2Seq):
         collated = super().__call__(features, return_tensors=return_tensors)
         if pixel_values is not None:
             collated["pixel_values"] = pixel_values
+        collated["filenames"] = filenames
         return collated
 
 
