@@ -286,7 +286,6 @@ class Blip2ForConditionalGeneration(Blip2PreTrainedModel):
         # step 1: forward the images through the vision encoder,
         # to get image embeddings of shape (batch_size, seq_len, hidden_size)
         
-        vision_outputs = 'temp_test'
         #vision_outputs = self.vision_model(
         #    pixel_values=pixel_values,
         #    output_attentions=output_attentions,
@@ -339,7 +338,6 @@ class Blip2ForConditionalGeneration(Blip2PreTrainedModel):
             loss = None
             # we compute the loss here since we need to take into account the sequence length of the query embeds
             if labels is not None:
-                labels = labels.to(logits.device)
                 logits = logits[:, -labels.size(1) :, :]
                 # Shift so that tokens < n predict n
                 shift_logits = logits[..., :-1, :].contiguous()
@@ -370,7 +368,7 @@ class Blip2ForConditionalGeneration(Blip2PreTrainedModel):
         return Blip2ForConditionalGenerationModelOutput(
             loss=loss,
             logits=logits,
-            vision_outputs=vision_outputs,
+            #vision_outputs=vision_outputs,
             qformer_outputs=query_outputs,
             language_model_outputs=outputs,
         )
