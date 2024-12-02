@@ -20,7 +20,8 @@ from src.datasets.utils import (
 )
 from src.modeling.model_blip import VideoBlipForConditionalGeneration
 from configs.load_config import get_custom_args
-from src.modeling.trainer import Trainer
+from torch.utils.data import DataLoader
+
 from src.tasks.train import Train
 
 PROMPT = "Please provide a detailed description of this movie clip."
@@ -52,6 +53,7 @@ def preprocess(
         processor.tokenizer, PROMPT, cleaned_narration_text, decoder_only_lm
     )
     preprocessed["pixel_values"] = item["frames"]
+    preprocessed['video_id'] = item['cmd_ad_filename']
 
     return preprocessed
 
@@ -89,9 +91,9 @@ def main():
 
     logger.info('Loading training dataset...')
     train_data = FrameDataset(
-        model_args,
-        data_args.train_visual_features_dir,
-        data_args.train_annotation_file,
+        model_args=model_args,
+        frames_dir=data_args.train_visual_features_dir,
+        annotation_file=data_args.train_annotation_file,
         transform=partial(
             preprocess,
             processor,
@@ -102,9 +104,9 @@ def main():
     
     logger.info('Loading validation dataset...')
     val_data = FrameDataset(
-        model_args,
-        data_args.val_visual_features_dir,
-        data_args.val_annotation_file,
+        model_args=model_args,
+        frames_dir=data_args.val_visual_features_dir,
+        annotation_file=data_args.val_annotation_file,
         transform=partial(
             preprocess,
             processor,
@@ -115,20 +117,25 @@ def main():
 
     training_args.load_best_model_at_end = True
 
-    dataloader = Trainer(           # Using transformers Trainer for the dataloader only
-        model=model,
-        args=training_args,
-        train_dataset=train_data,
-        eval_dataset=val_data,
-        data_collator=DataCollatorForVideoSeq2Seq(
-            processor.tokenizer,
-            pad_to_multiple_of=8 if training_args.fp16 or training_args.bf16 else None,
-        ),
+    data_collator = DataCollatorForVideoSeq2Seq(
+        processor.tokenizer,
+        pad_to_multiple_of=8 if training_args.fp16 or training_args.bf16 else None,
     )
 
-    train_dataloader = dataloader.get_train_dataloader()
-    val_dataloader = dataloader.get_eval_dataloader(val_data)
+    train_dataloader = DataLoader(
+        train_data,
+        batch_size=training_args.per_device_train_batch_size,
+        collate_fn=data_collator,
+        shuffle=True,
+    )
     training_args.max_iter = len(train_dataloader)
+
+    val_dataloader = DataLoader(
+        val_data,
+        batch_size=training_args.per_device_train_batch_size,
+        collate_fn=data_collator,
+        shuffle=True,
+    )
 
     trainer = Train(training_args, model, processor, val_dataloader, train_dataloader)
     trainer.train()
