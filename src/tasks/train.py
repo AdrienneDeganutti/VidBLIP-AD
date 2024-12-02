@@ -84,6 +84,7 @@ class Train:
         optimizer, num_training_steps, scheduler = self.mixed_precision_init()
 
         # WandB initialization
+        wandb.login() 
         wandb.init(project="blip2-ad", name="Debugging",
                config=vars(self.args))
     
