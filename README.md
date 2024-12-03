@@ -23,6 +23,6 @@ git clone https://github.com/sks3i/pycocoevalcap.git
 ## Model Memory Requirements
 | CPU memory | GPU memory |
 |:-----|:-----|
-| - GB | 10.70 GB |
+| 685 MB | 10.70 GB |
 
 </div>
