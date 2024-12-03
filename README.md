@@ -17,3 +17,12 @@ cd eval_metrics
 git clone https://github.com/sks3i/pycocoevalcap.git
 
 ```
+
+</div>
+
+## Model Memory Requirements
+| CPU memory | GPU memory |
+|:-----|:-----|
+| - GB | 10.70 GB |
+
+</div>
