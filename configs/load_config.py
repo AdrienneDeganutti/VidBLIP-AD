@@ -15,6 +15,12 @@ class DataArguments:
     val_annotation_file: str
 
 @dataclass
+class LoggingArguments:
+    wandb_log: bool
+    wandb_project: str
+    checkpoint_epoch: int
+
+@dataclass
 class TrainingArguments(HFTrainingArguments):
     optim: str = field(default="adamw_torch")
 
@@ -36,6 +42,12 @@ def get_custom_args(config_file: str):
         val_annotation_file=config['val_annotation_file']
     )
 
+    logging_args = LoggingArguments(
+        wandb_log=config['wandb_log'],
+        wandb_project=config['wandb_project'],
+        checkpoint_epoch=config['checkpoint_epoch']
+    )
+
     training_args = TrainingArguments(
         output_dir=config['output_dir'],
         do_train=config['do_train'],
@@ -54,10 +66,8 @@ def get_custom_args(config_file: str):
         per_device_eval_batch_size=config['per_device_eval_batch_size'],
         eval_strategy=config['eval_strategy'],
         eval_steps=config['eval_steps'],
-        save_strategy=config['save_strategy'],
-        save_steps=config['save_steps'],
         save_total_limit=config['save_total_limit'],
-        logging_steps=config['logging_steps']
+        logging_steps=config['logging_steps'],
     )
 
-    return model_args, data_args, training_args
+    return model_args, data_args, training_args, logging_args
