@@ -6,22 +6,24 @@ from eval_metrics.pycocoevalcap.bleu.bleu import Bleu
 from eval_metrics.pycocoevalcap.meteor.meteor import Meteor
 from eval_metrics.pycocoevalcap.rouge.rouge import Rouge
 from eval_metrics.pycocoevalcap.cider.cider import Cider
+from src.utils.logger import LOGGER as logger
 
 
 class Evaluation:
-    def __init__(self, training_args, model, processor, val_dataloader, train_dataloader):
+    def __init__(self, training_args, logging_args, model, processor, val_dataloader, train_dataloader):
         self.args = training_args
+        self.logging = logging_args
         self.model = model
         self.processor = processor 
         self.val_dataloader = val_dataloader
         self.train_dataloader = train_dataloader
         
-        self.log_predictions = PredictionLogger(processor, output_csv_path=training_args.output_dir)
+        self.log_predictions = PredictionLogger(processor, training_args.output_dir)
 
 
     def evaluate(self, output_dir, epoch):
         self.model.eval()
-        total_loss = 0.0
+        epoch_loss = 0.0
 
         if self.args.include_for_metrics:
             #total_metrics = {name: 0.0 for name in ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']}
@@ -44,9 +46,9 @@ class Evaluation:
                     labels=input_ids
                 )
                 loss = outputs.loss
-                total_loss += loss.item()
+                epoch_loss += loss.item()
 
-                wandb.log({"val_batch_loss": loss})
+                wandb.log({"validation_loss_batch": loss}) if self.logging.wandb_log else None
 
                 if batch_count == 0 and epoch % 3 == 0 and epoch != 0:
                     val_batch_metrics = self.compute_metrics(outputs, batch)
@@ -62,9 +64,11 @@ class Evaluation:
 
 
         # Compute average loss
-        avg_loss = total_loss / len(self.val_dataloader)
+        avg_loss = epoch_loss / len(self.val_dataloader)
+        logger.info(f"Validation Loss: {avg_loss:.4f}")
+        wandb.log({"validation_loss_epoch": avg_loss}) if self.logging.wandb_log else None
 
-        return avg_loss
+        return
     
 
     def compute_metrics(self, outputs, batch):
