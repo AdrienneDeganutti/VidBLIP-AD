@@ -14,10 +14,10 @@ class PredictionLogger:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         output_prediction_filepath = join(self.output_dir, f'epoch_{epoch}', f'{timestamp}_predictions.csv')
         
-        if not os.path.exists(output_prediction_filepath):
-            with open(output_prediction_filepath, mode='w', newline='', encoding='utf-8') as file:
-                writer = csv.writer(file)
-                writer.writerow(["video_id", "prediction"])
+        os.makedirs(join(self.output_dir, f'epoch_{epoch}'), exist_ok=True)
+        with open(output_prediction_filepath, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow(["video_id", "prediction"])
 
         return output_prediction_filepath
 
