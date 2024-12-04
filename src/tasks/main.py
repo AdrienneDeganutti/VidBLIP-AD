@@ -60,7 +60,7 @@ def preprocess(
 
 def main():
     config_file = "configs/training_config.json"
-    model_args, data_args, training_args = get_custom_args(config_file)
+    model_args, data_args, training_args, logging_args = get_custom_args(config_file)
     # Don't remove "unused columns" such as clip-related columns
     training_args.remove_unused_columns = False
 
@@ -84,10 +84,7 @@ def main():
     model.enable_input_require_grads()
     logger.info('Moving model to device...')
     model = model.to(training_args.device)
-    print_gpu_memory()
 
-    #for name, param in model.named_parameters():
-    #    print(f"{name}: requires_grad={param.requires_grad}")
 
     logger.info('Loading training dataset...')
     train_data = FrameDataset(
@@ -137,12 +134,8 @@ def main():
         shuffle=False,
     )
 
-    trainer = Train(training_args, model, processor, val_dataloader, train_dataloader)
+    trainer = Train(training_args, logging_args, model, processor, val_dataloader, train_dataloader)
     trainer.train()
-    
-    #trainer.train(resume_from_checkpoint=training_args.resume_from_checkpoint)
-    model.save_pretrained(training_args.output_dir)
-    processor.save_pretrained(training_args.output_dir)
 
 
 if __name__ == "__main__":
