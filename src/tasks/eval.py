@@ -26,7 +26,6 @@ class Evaluation:
         epoch_loss = 0.0
 
         if self.args.include_for_metrics:
-            #total_metrics = {name: 0.0 for name in ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']}
             batch_count = 0
 
         with torch.no_grad():
@@ -36,7 +35,6 @@ class Evaluation:
                 pixel_values = batch["pixel_values"]
                 input_ids = batch["input_ids"]
                 attention_mask = batch["attention_mask"]
-                labels = batch["labels"] 
 
                 # Forward pass
                 outputs = self.model(
@@ -50,15 +48,15 @@ class Evaluation:
 
                 wandb.log({"validation_loss_batch": loss}) if self.logging.wandb_log else None
 
-                if batch_count == 0 and epoch % 3 == 0 and epoch != 0:
+                if batch_count == 0 and epoch % self.args.eval_steps == 0 and epoch != 0:
                     val_batch_metrics = self.compute_metrics(outputs, batch)
                     metric_names = ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']
                     log_metrics = {f"val_batch_{name}": val_batch_metrics[name] for name in metric_names}
-                    wandb.log(log_metrics)
+                    wandb.log(log_metrics) if self.logging.wandb_log else None
                     batch_count += 1
                 
                     if self.args.per_device_train_batch_size == 1:
-                        self.log_predictions.log(video_id, outputs['logits'])
+                        self.log_predictions.log(video_id, outputs['logits'], epoch)
                     elif self.args.per_device_train_batch_size > 1:
                         self.log_predictions.log_batch(video_id, outputs['logits'], epoch)
 
@@ -76,27 +74,21 @@ class Evaluation:
         logits = outputs['logits']  # Shape: [batch, seq, dim]
         predicted_tokens = torch.argmax(logits, dim=-1)  # Shape: [batch, seq]
 
-        # Convert references to tokens
         references = batch['labels']  # Shape: [batch, seq]
 
-        # Detach and convert tensors to lists
         predicted_tokens = predicted_tokens.cpu().tolist()
         references = references.cpu().tolist()
 
-        # Prepare data for pycocoevalcap
         res = {}
         gts = {}
 
         for idx, (pred, ref) in enumerate(zip(predicted_tokens, references)):
-            # Filter out padding tokens
             pred = [token for token in pred if token != -100]
             ref = [token for token in ref if token != -100]
 
-            # Decode token indices to text
             pred_text = self.processor.decode(pred, skip_special_tokens=True).strip()
             ref_text = self.processor.decode(ref, skip_special_tokens=True).strip()
 
-            # Populate result and ground truth dictionaries
             res[idx] = [{"caption": pred_text}]
             gts[idx] = [{"caption": ref_text}]
 
@@ -104,7 +96,6 @@ class Evaluation:
         gts = tokenizer.tokenize(gts)
         res = tokenizer.tokenize(res)
 
-        # Initialize scorers
         scorers = [
             (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
             (Meteor(), "METEOR"),
@@ -112,7 +103,6 @@ class Evaluation:
             (Cider(), "CIDEr"),
         ]
 
-        # Compute scores
         scores = {}
         for scorer, method in scorers:
             score, _ = scorer.compute_score(gts, res)
