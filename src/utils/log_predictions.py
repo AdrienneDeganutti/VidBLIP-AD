@@ -1,25 +1,36 @@
 import csv
 import os
+from os.path import join
 import torch
 from datetime import datetime
 
 class PredictionLogger:
-    def __init__(self, processor, output_csv_path):
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self.output_csv_path = f"{output_csv_path}_{timestamp}_validation_predictions.csv"
+    def __init__(self, processor, output_dir):
+        self.processor = processor
+        self.output_dir = output_dir
+    
+    def write_csv(self, epoch):
 
-        # Initialize the CSV file with headers if it does not exist
-        if not os.path.exists(self.output_csv_path):
-            with open(self.output_csv_path, mode='w', newline='', encoding='utf-8') as file:
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        output_prediction_filepath = join(self.output_dir, f'epoch_{epoch}', f'{timestamp}_predictions.csv')
+        
+        if not os.path.exists(output_prediction_filepath):
+            with open(output_prediction_filepath, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
                 writer.writerow(["video_id", "prediction"])
-        
-        self.processor = processor
 
-    def log(self, id, prediction):
-        with open(self.output_csv_path, mode='a', newline='', encoding='utf-8') as file:
+        return output_prediction_filepath
+
+
+    def log(self, id, prediction, epoch):
+        logits = torch.max(prediction, -1)[1].data
+        decoded_text = self.processor.decode(logits, skip_special_tokens=True).strip()
+
+        output_prediction_filepath = self.write_csv(epoch)
+        with open(output_prediction_filepath, mode='a', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-            writer.writerow([id, prediction])
+            writer.writerow([id, decoded_text])
+
 
     def log_batch(self, batch_ids, predictions, epoch):
         assert len(batch_ids) == len(predictions)
@@ -31,7 +42,8 @@ class PredictionLogger:
             for sequence in logits
         ]
 
-        with open(self.output_csv_path, mode='a', newline='', encoding='utf-8') as file:
+        output_prediction_filepath = self.write_csv(epoch)
+        with open(output_prediction_filepath, mode='a', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             writer.writerow([f'epoch: {epoch}'])
             for batch_ids, batch_decoded_texts in zip(batch_ids, batch_decoded_texts):
