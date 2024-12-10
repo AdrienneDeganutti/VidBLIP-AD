@@ -67,7 +67,6 @@ class Train:
         epoch_loss = 0.0
 
         if self.args.include_for_metrics:
-            #total_metrics = {name: 0.0 for name in ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']}
             batch_count = 0
 
 
@@ -95,12 +94,12 @@ class Train:
             scheduler.step()
             optimizer.zero_grad()
 
-            if batch_count == 0 and epoch % 3 == 0 and epoch != 0:      # Only perform evaluation on the first batch of every 3 epochs
-                train_batch_metrics = self.evaluation.compute_metrics(outputs, batch)
-                metric_names = ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']
-                log_metrics = {f"train_batch_{name}": train_batch_metrics[name] for name in metric_names}
-                wandb.log(log_metrics)
-                batch_count += 1
+            #if batch_count == 0 and epoch % self.args.eval_steps == 0 and epoch != 0:
+            #    train_batch_metrics = self.evaluation.compute_metrics(outputs, batch)
+            #    metric_names = ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'ROUGE_L', 'METEOR', 'CIDEr']
+            #    log_metrics = {f"train_batch_{name}": train_batch_metrics[name] for name in metric_names}
+            #    wandb.log(log_metrics) if self.logging.wandb_log else None
+            #    batch_count += 1
 
         # Compute average loss over the full epoch
         avg_loss = epoch_loss / len(self.train_dataloader)
