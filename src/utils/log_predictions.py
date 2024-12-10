@@ -24,7 +24,7 @@ class PredictionLogger:
 
     def log(self, id, prediction, epoch):
         logits = torch.max(prediction, -1)[1].data
-        decoded_text = self.processor.decode(logits, skip_special_tokens=True).strip()
+        decoded_text = self.processor.decode(logits[0], skip_special_tokens=True).strip()
 
         output_prediction_filepath = self.write_csv(epoch)
         with open(output_prediction_filepath, mode='a', newline='', encoding='utf-8') as file:
