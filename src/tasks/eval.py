@@ -46,7 +46,7 @@ class Evaluation:
                 loss = outputs.loss
                 epoch_loss += loss.item()
 
-                wandb.log({"validation_loss_batch": loss}) if self.logging.wandb_log else None
+                wandb.log({"validation_loss_step": loss}) if self.logging.wandb_log else None
 
                 if batch_count == 0 and epoch % self.args.eval_steps == 0 and epoch != 0:
                     val_batch_metrics = self.compute_metrics(outputs, batch)
